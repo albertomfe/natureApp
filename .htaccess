@@ -1,0 +1,106 @@
+RewriteEngine on
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.*)$ $1.php
+
+
+#----------------------SEGURIDAD WEB----------------------------------------
+
+#Header edit Set-Cookie "(.)([Hh][Tt][Tt][Pp][Oo][Nn][Ll][Yy])?(.)" "$1$2 ;HTTPOnly"
+#Header edit Set-Cookie "(.)([Ss][Ee][Cc][Uu][Rr][Ee])?(.)" "$1$2 ;Secure"
+#php_value session.cookie_httponly 1
+#php_value session.cookie_secure 1
+
+Header always edit Set-Cookie (.*) "$1; SameSite=Lax"
+# X-Frame-Options
+<IfModule mod_headers.c>
+	Header set X-Content-Type-Options nosniff
+	# X-XSS-Protection
+	Header set X-XSS-Protection "1; mode=block"
+	Header always append X-Frame-Options SAMEORIGIN
+	# X-Content-Type nosniff
+	Header set X-Content-Type-Options nosniff
+	#trasporte estricto seguro
+	Header always set Strict-Transport-Security max-age=31536000
+</IfModule>
+
+#si no encuentra el Index no listar Documnetos
+IndexIgnore *
+
+
+
+
+#--------------------------------------------------------------
+
+
+#compresion de archivos antes de enviar al servidor
+<IfModule mod_gzip.c>
+	mod_gzip_on Yes
+	mod_gzip_item_include file \.html$
+	mod_gzip_item_include file \.php$
+	mod_gzip_item_include file \.css$
+	mod_gzip_item_include file \.js$
+	mod_gzip_item_include mime ^application/javascript$
+	mod_gzip_item_include mime ^application/x-javascript$
+	mod_gzip_item_include mime ^text/.*
+	mod_gzip_item_include handler ^application/x-httpd-php
+	mod_gzip_item_exclude mime ^image/.*
+</IfModule>
+
+
+# Sitio web seguro utilizando es una directiva de los servidores web Apache , que sirve  para seguir los enlaces simbólicos de un directorio.
+Options +FollowSymlinks
+
+#Oculta la versión y otra información delicada
+ServerSignature Off
+
+# Regla # 4a - Bloquea cualquier script que intente bas64_encode crap para enviar a través de URL
+RewriteCond %{QUERY_STRING} base64_encode.*(.*) [OR]
+# Regla # 4b: bloquear cualquier secuencia de comandos que incluya una etiqueta <script> en la URL
+RewriteCond %{QUERY_STRING} (<|%3C).*script.*(>|%3E) [NC,OR]
+# Regla # 4c: bloquee cualquier secuencia de comandos que intente establecer una variable GLOBALS de PHP a través de la URL
+RewriteCond %{QUERY_STRING} GLOBALS(=|[|%[0-9A-Z]{0,2}) [OR]
+# Regla # 4d - Bloquea cualquier script que intente modificar una variable _REQUEST a través de la URL
+RewriteCond %{QUERY_STRING} _REQUEST(=|[|%[0-9A-Z]{0,2})
+# Regla # 4e: envíe todas las solicitudes bloqueadas a la página de inicio con 403 ¡Error prohibido!
+RewriteRule ^(.*)$ index.php [F,L]
+
+
+
+# Prevent XSS attacks
+RewriteCond %{QUERY_STRING} http://([a-zA-Z0-9_\-]*) [NC,OR]
+RewriteCond %{QUERY_STRING} http:/([a-zA-Z0-9_\-]*) [NC,OR]
+RewriteCond %{QUERY_STRING} cmd= [NC,OR]
+RewriteCond %{QUERY_STRING} &cmd [NC,OR]
+RewriteCond %{QUERY_STRING} exec [NC,OR]
+RewriteCond %{QUERY_STRING} execu [NC,OR]
+RewriteCond %{QUERY_STRING} concat [NC]
+RewriteCond %{REQUEST_METHOD} ^(HEAD|TRACE|DELETE|TRACK) [NC,OR]
+RewriteCond %{THE_REQUEST} ^.*(\|\|%0A|%0D).* [NC,OR]
+RewriteCond %{HTTP_REFERER} ^(.*)(<|>|'|%0A|%0D|%27|%3C|%3E|).* [NC,OR]
+RewriteCond %{HTTP_COOKIE} ^.*(<|>|'|%0A|%0D|%27|%3C|%3E|).* [NC,OR]
+RewriteCond %{REQUEST_URI} ^/(,|;|:|<|>|">|"<|/|\\\.\.\\).{0,9999}.* [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} ^$ [OR]
+RewriteCond %{HTTP_USER_AGENT} ^(java|curl|wget).* [NC,OR]
+RewriteCond %{HTTP_USER_AGENT}^.*(winhttp|HTTrack|clshttp|archiver|loader|email|harvest|extract|grab|miner).* [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} ^.*(libwww-perl|curl|wget|python|nikto|scan).* [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} ^.*(<|>|'|%0A|%0D|%27|%3C|%3E|).* [NC,OR]
+RewriteCond %{QUERY_STRING} ^.*(;|<|>|'|"|\)|%0A|%0D|%22|%27|%3C|%3E|).*(/\*|union|select|insert|cast|set|declare|drop|update|md5|benchmark|print|printf|system|exec|scanf).* [NC,OR]
+RewriteCond %{QUERY_STRING} ^.*(localhost|loopback|127\.0\.0\.1).* [NC,OR]
+RewriteCond %{QUERY_STRING} ^.*(<|>|'|%0A|%0D|%27|%3C|%3E|).* [NC]
+RewriteRule ^.* - [F]
+
+# Prevenir inyecciones SQL
+RewriteCond %{QUERY_STRING} UNION([%20\ /\*+]*)ALL([%20\ /\*+]*)SELECT [NC,OR]
+RewriteCond %{QUERY_STRING} UNION([%20\ /\*+]*)SELECT [NC,OR]
+RewriteCond %{QUERY_STRING} /\* [NC,OR]
+RewriteCond %{QUERY_STRING} \*/ [NC]
+RewriteRule ^.* - [F]
+RewriteCond %{QUERY_STRING} base64_encode.*\(.*\) [OR]
+RewriteCond %{QUERY_STRING} http:.*\/.*\/ [OR]
+RewriteCond %{QUERY_STRING} ..*\/ [OR]
+RewriteCond %{QUERY_STRING} (\<|%3C).*script.*(\>|%3E) [NC,OR]
+RewriteCond %{QUERY_STRING} GLOBALS(=|\[|\%[0-9A-Z]{0,2}) [OR]
+RewriteCond %{QUERY_STRING} _REQUEST(=|\[|\%[0-9A-Z]{0,2})
+RewriteCond %{QUERY_STRING} [^az](declare|char|set|cast|convert|delete|drop|exec|insert|meta|script|select|truncate|update)[^a-z] [NC]
+RewriteRule (.*) - [F]
